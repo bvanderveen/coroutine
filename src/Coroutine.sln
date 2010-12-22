@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coroutine", "Coroutine\Coroutine.csproj", "{FD3EBCCF-F96F-405E-9EE9-BC88C38F778C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coroutine.Tests", "Coroutine.Tests\Coroutine.Tests.csproj", "{9B0C2C69-6FE4-4375-A83C-5C4777B326B2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FD3EBCCF-F96F-405E-9EE9-BC88C38F778C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD3EBCCF-F96F-405E-9EE9-BC88C38F778C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD3EBCCF-F96F-405E-9EE9-BC88C38F778C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD3EBCCF-F96F-405E-9EE9-BC88C38F778C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B0C2C69-6FE4-4375-A83C-5C4777B326B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B0C2C69-6FE4-4375-A83C-5C4777B326B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B0C2C69-6FE4-4375-A83C-5C4777B326B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B0C2C69-6FE4-4375-A83C-5C4777B326B2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
