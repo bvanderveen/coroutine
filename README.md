@@ -20,8 +20,6 @@ If you provide a TaskScheduler when creating a coroutine Task, the iterator bloc
 
 Coroutine was designed for use with [Kayak](http://github.com/kayak/kayak), a C# web server. A common use-case for Coroutine within Kayak is performing asynchronous IO. In the following example, a stream is read asynchronously and buffered into a string.
 
-class CoroutineExample
-{
     public void ReadStreamToEnd(Stream stream)
     {
         ReadStreamToEndCoroutine(stream).AsCoroutine<string>().ContinueWith(t => "Stream contained: " + t.Result);
@@ -55,4 +53,3 @@ class CoroutineExample
         // yield an object of type string, this will be the result of the Coroutine Task
         yield return sb.ToString();
     }
-}
