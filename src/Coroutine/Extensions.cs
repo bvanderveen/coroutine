@@ -46,6 +46,30 @@ namespace Coroutine
 
             return cs.Task;
         }
+        
+        /// <summary>
+        /// Returns Task&lt;object&gt; if the argument is a Task&lt;T&gt;, otherwise null.
+        /// </summary>
+        /// <param name="task"></param>
+        /// <returns></returns>
+        public static Task<object> AsTaskWithValue(this Task task)
+        {
+            // well, this is significantly less painful than the observable version...
+
+            var taskType = task.GetType();
+
+            if (!taskType.IsGenericType) return null;
+
+            var tcs = new TaskCompletionSource<object>();
+            task.ContinueWith(t =>
+            {
+                if (task.IsFaulted)
+                    tcs.SetException(task.Exception);
+                else
+                    tcs.SetResult(taskType.GetProperty("Result").GetGetMethod().Invoke(task, null));
+            });
+            return tcs.Task;
+        }
 
         public static Task<T> CreateCoroutine<T>(this IEnumerable<object> iteratorBlock)
         {
