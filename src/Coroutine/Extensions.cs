@@ -18,6 +18,14 @@ namespace Coroutine
             return iteratorBlock.AsCoroutine<T>(TaskCreationOptions.None, scheduler);
         }
 
+        /// <summary>
+        /// Creates a Coroutine Task from the iterator block. 
+        /// </summary>
+        /// <typeparam name="T">The type of the expected return value of the Coroutine.</typeparam>
+        /// <param name="iteratorBlock">The iterator block.</param>
+        /// <param name="opts">The <cref>TaskCreationOptions</cref> for the Coroutine Task.</param>
+        /// <param name="scheduler">The <cref>TaskScheduler</cref> on which the Coroutine should execute.</param>
+        /// <returns></returns>
         public static Task<T> AsCoroutine<T>(this IEnumerable<object> iteratorBlock, TaskCreationOptions opts, TaskScheduler scheduler)
         {
             var coroutine = new Coroutine<T>(iteratorBlock.GetEnumerator(), scheduler);
@@ -58,25 +66,6 @@ namespace Coroutine
                     tcs.SetResult(t.Result);
             }));
 
-            return tcs.Task;
-        }
-
-        public static Task<object> AsTaskWithValue(this Task task)
-        {
-            // well, this is significantly less painful than the observable version...
-
-            var taskType = task.GetType();
-
-            if (!taskType.IsGenericType) return null;
-
-            var tcs = new TaskCompletionSource<object>();
-            task.ContinueWith(t =>
-            {
-                if (task.IsFaulted)
-                    tcs.SetException(task.Exception);
-                else
-                    tcs.SetResult(taskType.GetProperty("Result").GetGetMethod().Invoke(task, null));
-            });
             return tcs.Task;
         }
     }
