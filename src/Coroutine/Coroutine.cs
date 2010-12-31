@@ -9,69 +9,31 @@ namespace Coroutine
 
     public class ContinuationState
     {
-        internal Continuation Continuation;
-        public ContinuationState(Continuation c)
-        {
-            Continuation = c;
-        }
-    }
+        [ThreadStatic]
+        public static ContinuationState current;
 
-    public class ContinuationState<T> : ContinuationState
-    {
-        public ContinuationState(Continuation c) : base(c) { }
-        public T Result { get { if (Coroutine.exceptionState != null) throw Coroutine.exceptionState; return (T)Coroutine.resultState; } }
+        internal object result;
+        internal Exception exception;
+        internal Continuation Continuation;
+
+        public static void SetContinuation(ContinuationState state, Continuation continuation)
+        {
+            state.Continuation =
+                (r, e) => continuation(
+                    r0 => { state.result = r0; r(r0); }, 
+                    e0 => { state.exception = e0; e(e0); });
+        }
+
+        public T GetResult<T>() {
+            if (ContinuationState.current.exception != null) 
+                throw ContinuationState.current.exception;
+
+            return (T)ContinuationState.current.result; 
+        }
     }
 
     public static class Coroutine
     {
-        public static Task<object> AsTask(this Continuation cont)
-        {
-            var tcs = new TaskCompletionSource<object>();
-
-            cont(r => tcs.SetResult(r), e => tcs.SetException(e));
-
-            return tcs.Task;
-        }
-
-        public static Continuation AsContinuation(this Task task)
-        {
-            return (complete, exception) =>
-            {
-                task.ContinueWith(t => complete(null));
-            };
-        }
-
-        public static Continuation AsContinuation(this IObservable<object> observable)
-        {
-            return (complete, exception) =>
-                {
-                    observable.Subscribe(new CompletionObserver(complete));
-                };
-        }
-
-        class CompletionObserver : IObserver<object>
-        {
-            Action<object> complete;
-
-            public CompletionObserver(Action<object> complete)
-            {
-                this.complete = complete;
-            }
-
-            public void OnCompleted()
-            {
-                complete(null);
-            }
-
-            public void OnError(Exception error) { }
-            public void OnNext(object value) { }
-        }
-
-        [ThreadStatic]
-        internal static object resultState;
-        [ThreadStatic]
-        internal static Exception exceptionState;
-
         public static void Continue(IEnumerator<object> continuation, Action<object> result, Action<Exception> exception, Action<Action> trampoline)
         {
             //Console.WriteLine("Continuing!");
@@ -113,21 +75,18 @@ namespace Coroutine
                 
                 if (cont != null)
                 {
-                    cont(
-                        (trampoline == null ? 
-                            (Action<object>)(r => 
-                                { 
-                                    resultState = r; 
+                    ContinuationState currentState = ContinuationState.current;
+
+                    Action setStateAndContinue = () => {
+                                    ContinuationState.current = currentState;
                                     Continue(continuation, result, exception, trampoline); 
-                                    resultState = null;
-                                }) :
-                            (Action<object>)(r => trampoline(() => 
-                                { 
-                                    resultState = r; 
-                                    Continue(continuation, result, exception, trampoline); 
-                                    resultState = null; 
-                                }))),
-                        e => { exceptionState = e; exception(e); exceptionState = null; });
+                                };
+
+                    Action<object> trampolined = trampoline == null ? 
+                        (Action<object>)(_ => setStateAndContinue()) : 
+                        (Action<object>)(_ => trampoline(setStateAndContinue));
+
+                    cont(trampolined, trampolined);
                 }
                 else
                 {

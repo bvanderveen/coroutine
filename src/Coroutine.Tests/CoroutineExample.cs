@@ -8,6 +8,15 @@ namespace Coroutine.Tests
 {
     static class CoroutineExample
     {
+        // this thing is roughly equivalent to:
+        //public async Task<string> ReadStreamToEnd(Stream stream)
+        //{
+        //    ...
+
+        //    var bytesRead = await steam.ReadAsync(buffer, 0, buffer.Length);
+            
+        //    ...
+        //}
         public static IEnumerable<object> ReadStreamToEnd(Stream stream)
         {
             StringBuilder sb = new StringBuilder();
@@ -16,10 +25,17 @@ namespace Coroutine.Tests
 
             do
             {
-                var read = stream.ReadAsync(buffer, 0, buffer.Length);
+                //var read = stream.ReadAsync(buffer, 0, buffer.Length);
+                //yield return read;
+
+                //bytesRead = read.GetResult<int>();
+
+                var read = stream.ReadAsyncTask(buffer, 0, buffer.Length);
                 yield return read;
+
                 bytesRead = read.Result;
 
+                //bytesRead = stream.Read(buffer, 0, buffer.Length);
 
                 sb.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
             }
@@ -28,11 +44,18 @@ namespace Coroutine.Tests
             yield return sb.ToString();
         }
 
-        static ContinuationState<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
+        static Task<int> ReadAsyncTask(this Stream stream, byte[] buffer, int offset, int count)
         {
-            return Extensions.AsContinuationState<int>(
+            return Task.Factory.FromAsync<int>(
+                (cb, s) => stream.BeginRead(buffer, 0, buffer.Length, cb, s),
+                iasr => stream.EndRead(iasr), null);
+        }
+
+        static ContinuationState ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
+        {
+            return Extensions.SetCurrentContinuation(Extensions.AsContinuation(
                 (cb, s) => stream.BeginRead(buffer, offset, count, cb, s),
-                stream.EndRead);
+                stream.EndRead));
         }
     }
 }
