@@ -7,14 +7,6 @@ namespace Coroutine
 {
     public delegate void Continuation(Action<object> complete, Action<Exception> exception);
 
-
-    //public interface IContinuationState<out T>
-    //{
-    //    Continuation Continuation { get; }
-    //    T Result { get; }
-    //}
-
-
     public class ContinuationState
     {
         internal Continuation Continuation;
@@ -23,13 +15,14 @@ namespace Coroutine
             Continuation = c;
         }
     }
+
     public class ContinuationState<T> : ContinuationState
     {
         public ContinuationState(Continuation c) : base(c) { }
-        public T Result { get { if (Coroutine2.exceptionState != null) throw Coroutine2.exceptionState; return (T)Coroutine2.resultState; } }
+        public T Result { get { if (Coroutine.exceptionState != null) throw Coroutine.exceptionState; return (T)Coroutine.resultState; } }
     }
 
-    public static class Coroutine2
+    public static class Coroutine
     {
         public static Task<object> AsTask(this Continuation cont)
         {
@@ -94,7 +87,6 @@ namespace Coroutine
             catch (Exception e)
             {
                 //Console.WriteLine("Exception during MoveNext.");
-                Console.WriteLine("Exit location 1.");
                 continuation.Dispose();
                 exception(e);
                 return;
@@ -103,7 +95,6 @@ namespace Coroutine
             if (!continues)
             {
                 //Console.WriteLine("Continuation does not continue.");
-                Console.WriteLine("Exit location 2.");
                 continuation.Dispose();
                 //result(null);
                 return;
@@ -147,108 +138,8 @@ namespace Coroutine
             }
             catch (Exception e)
             {
-                Console.WriteLine("Exit location 3.");
                 continuation.Dispose();
                 exception(e);
-                return;
-            }
-        }
-    }
-
-    public class Coroutine<T>
-    {
-        IEnumerator<object> continuation;
-        AsyncResult<T> asyncResult;
-        TaskScheduler scheduler;
-
-        public Coroutine(IEnumerator<object> continuation, TaskScheduler scheduler)
-        {
-            this.continuation = continuation;
-            this.scheduler = scheduler;
-        }
-
-        public IAsyncResult BeginInvoke(AsyncCallback cb, object state)
-        {
-            asyncResult = new AsyncResult<T>(cb, state);
-
-            Continue(true);
-
-            return asyncResult;
-        }
-
-        public T EndInvoke(IAsyncResult result)
-        {
-            //Console.WriteLine("Coroutine.EndInvoke");
-            AsyncResult<T> ar = (AsyncResult<T>)result;
-            continuation.Dispose();
-            return ar.EndInvoke();
-        }
-
-        void Continue(bool sync)
-        {
-            //Console.WriteLine("Continuing!");
-            var continues = false;
-
-            try
-            {
-                continues = continuation.MoveNext();
-            }
-            catch (Exception e)
-            {
-                //Console.WriteLine("Exception during MoveNext.");
-                asyncResult.SetAsCompleted(e, sync);
-                return;
-            }
-
-            if (!continues)
-            {
-                //Console.WriteLine("Continuation does not continue.");
-                asyncResult.SetAsCompleted(null, sync);
-                return;
-            }
-
-            try
-            {
-                var value = continuation.Current;
-
-                var task = value as Task;
-
-                if (task != null)
-                {
-                    //Console.WriteLine("Will continue after Task.");
-                    task.ContinueWith(t =>
-                    {
-                        bool synch = ((IAsyncResult)t).CompletedSynchronously;
-
-                        if (false && t.IsFaulted) // disabled, iterator blocks must always remember to check for exceptions
-                        {
-                            //Console.WriteLine("Exception in Task.");
-                            //Console.Out.WriteException(t.Exception);
-                            asyncResult.SetAsCompleted(t.Exception, sync);
-                        }
-                        else
-                        {
-                            //Console.WriteLine("Continuing after Task.");
-                            Continue(sync);
-                        }
-                    }, CancellationToken.None, TaskContinuationOptions.None, scheduler);
-                }
-                else
-                {
-                    if (value is T)
-                    {
-                        //Console.WriteLine("Completing with value.");
-                        asyncResult.SetAsCompleted((T)value, sync);
-                        return;
-                    }
-
-                    //Console.WriteLine("Continuing, discarding value.");
-                    Continue(sync);
-                }
-            }
-            catch (Exception e)
-            {
-                asyncResult.SetAsCompleted(e, sync);
                 return;
             }
         }
