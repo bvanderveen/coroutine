@@ -6,14 +6,9 @@ using System.Text;
 
 namespace Coroutine.Tests
 {
-    class CoroutineExample
+    static class CoroutineExample
     {
-        public void ReadStreamToEnd(Stream stream)
-        {
-            ReadStreamToEndCoroutine(stream).AsCoroutine<string>().ContinueWith(t => "Stream contained: " + t.Result);
-        }
-
-        IEnumerable<object> ReadStreamToEndCoroutine(Stream stream)
+        public static IEnumerable<object> ReadStreamToEnd(Stream stream)
         {
             StringBuilder sb = new StringBuilder();
             var buffer = new byte[1024];
@@ -21,25 +16,23 @@ namespace Coroutine.Tests
 
             do
             {
-                // yield a task which will read from the stream asynchronously
-                var read = Task.Factory.FromAsync<int>((cb, s) =>
-                    {
-                        return stream.BeginRead(buffer, 0, buffer.Length, cb, s);
-                    }, iasr => stream.EndRead(iasr), null);
-
+                var read = stream.ReadAsync(buffer, 0, buffer.Length);
                 yield return read;
-
-                // retrieve the result. this may throw an exception if
-                // the task faulted. if we don't catch the exception,
-                // the coroutine task will also fault.
                 bytesRead = read.Result;
+
 
                 sb.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
             }
             while (bytesRead > 0);
 
-            // yield an object of type string, this will be the result of the Coroutine Task
             yield return sb.ToString();
+        }
+
+        static ContinuationState<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
+        {
+            return Extensions.AsContinuationState<int>(
+                (cb, s) => stream.BeginRead(buffer, offset, count, cb, s),
+                stream.EndRead);
         }
     }
 }

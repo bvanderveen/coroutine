@@ -120,6 +120,27 @@ namespace Coroutine
             return new ContinuationState<T>(iteratorBlock.AsContinuation(trampoline));
         }
 
+        public static ContinuationState<T> AsContinuationState<T>(Func<AsyncCallback, object, IAsyncResult> begin, Func<IAsyncResult, T> end)
+        {
+            return new ContinuationState<T>(AsContinuation(begin, end));
+        }
+
+        public static Continuation AsContinuation<T>(Func<AsyncCallback, object, IAsyncResult> begin, Func<IAsyncResult, T> end)
+        {
+            return (r, e) => begin(iasr => {
+                object result = null;
+                try
+                {
+                    result = end(iasr);
+                }
+                catch (Exception ex)
+                {
+                    e(ex);
+                }
+                r(result);
+            }, null);
+        }
+
         public static Continuation AsContinuation(this IEnumerable<object> iteratorBlock)
         {
             return iteratorBlock.AsContinuation(null);
@@ -128,7 +149,19 @@ namespace Coroutine
         public static Continuation AsContinuation(this IEnumerable<object> iteratorBlock, Action<Action> trampoline)
         {
             return (result, exception) =>
-                Coroutine2.Continue(iteratorBlock.GetEnumerator(), result, exception, trampoline);
+                iteratorBlock.BeginCoroutine(result, exception, trampoline);
+        }
+
+        public static void BeginCoroutine(this IEnumerable<object> iteratorBlock,
+            Action<object> result, Action<Exception> exception)
+        {
+            Coroutine2.Continue(iteratorBlock.GetEnumerator(), result, exception, null);
+        }
+
+        public static void BeginCoroutine(this IEnumerable<object> iteratorBlock,
+            Action<object> result, Action<Exception> exception, Action<Action> trampoline)
+        {
+            Coroutine2.Continue(iteratorBlock.GetEnumerator(), result, exception, trampoline);
         }
     }
 }

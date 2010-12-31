@@ -18,6 +18,7 @@ namespace Coroutine.Tests
             var mockDisposable = new Mock<IDisposable>();
 
             var task = ReturnsNullBlock(mockDisposable.Object).StartCoroutineTask();
+            task.Wait();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.IsTrue(task.IsCompleted, "Not IsCompleted");
@@ -39,6 +40,7 @@ namespace Coroutine.Tests
             var mockDisposable = new Mock<IDisposable>();
 
             var task = ReturnsResultBlock(mockDisposable.Object).StartCoroutineTask();
+            task.Wait();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.IsTrue(task.IsCompleted, "Not IsCompleted");
@@ -60,14 +62,14 @@ namespace Coroutine.Tests
             var mockDisposable = new Mock<IDisposable>();
             var exception = new Exception("oops");
 
-            Task task = null;
             Exception caughtException = null;
+            object result = null;
+            Exception yieldedException = null;
 
             try
             {
-                var block = ImmediateExceptionBlock(exception, mockDisposable.Object);
-
-                task = block.AsContinuation(_ => { }).AsTask();
+                ImmediateExceptionBlock(exception, mockDisposable.Object).AsContinuation(_ => { })
+                    (r => result = r, e => yieldedException = e);
             }
             catch (Exception e)
             {
@@ -75,6 +77,8 @@ namespace Coroutine.Tests
             }
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
+            Assert.IsNull(yieldedException);
+            Assert.IsNull(result);
             Assert.AreEqual(exception, caughtException, "Exceptions differ.");
         }
 
@@ -93,25 +97,38 @@ namespace Coroutine.Tests
             var mockDisposable = new Mock<IDisposable>();
             var exception = new Exception("oops");
 
-            Task task = null;
             Exception caughtException = null;
+            object result = null;
+            Exception yieldedException = null;
+            ManualResetEvent wh = new ManualResetEvent(false);
 
             try
             {
-                task = DeferredExceptionBlock(exception, mockDisposable.Object)
-                    //.AsCoroutine2<string>(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
-                    //.AsTask();
-                    .StartCoroutineTask();
+                DeferredExceptionBlock(exception, mockDisposable.Object).AsContinuation()
+                    (r => {
+                        result = r;
+                        wh.Set();
+                    }, e => 
+                    {
+                        yieldedException = e;
+                        wh.Set();
+                    });
+                wh.WaitOne();
             }
             catch (Exception e)
             {
                 caughtException = e;
             }
+            finally
+            {
+                wh.Close();
+            }
+
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.IsNull(caughtException, "Coroutine constructor threw up.");
-            Assert.IsNotNull(task.Exception, "Coroutine didn't have exception.");
-            Assert.AreEqual(exception, task.Exception.InnerException, "Exceptions differ.");
+            Assert.IsNull(result);
+            Assert.AreEqual(yieldedException, exception);
         }
 
         IEnumerable<object> DeferredExceptionBlock(Exception exception, IDisposable disposable)
