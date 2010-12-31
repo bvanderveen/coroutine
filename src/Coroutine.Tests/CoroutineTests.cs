@@ -27,7 +27,7 @@ namespace Coroutine.Tests
             Assert.AreEqual("result", task.Result);
         }
 
-        IEnumerable<object> ReturnsResultBlock(IDisposable disposable)
+        public static IEnumerable<object> ReturnsResultBlock(IDisposable disposable)
         {
             using (disposable)
             {
@@ -67,7 +67,7 @@ namespace Coroutine.Tests
             Assert.AreEqual(exception, caughtException, "Exceptions differ.");
         }
 
-        IEnumerable<object> ImmediateExceptionBlock(Exception exception, IDisposable disposable)
+        public static IEnumerable<object> ImmediateExceptionBlock(Exception exception, IDisposable disposable)
         {
             using (disposable)
             {
@@ -103,10 +103,10 @@ namespace Coroutine.Tests
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.IsNull(caughtException, "Coroutine constructor threw up.");
             Assert.IsNotNull(task.Exception, "Coroutine didn't have exception.");
-            Assert.AreEqual(exception, task.Exception.InnerException, "Exceptions differ.");
+            Assert.AreEqual(exception, task.Exception.InnerException.InnerException, "Exceptions differ.");
         }
 
-        IEnumerable<object> DeferredExceptionBlock(Exception exception, IDisposable disposable)
+        public static IEnumerable<object> DeferredExceptionBlock(Exception exception, IDisposable disposable)
         {
             using (disposable)
             {
@@ -128,8 +128,6 @@ namespace Coroutine.Tests
                     taskRun = true;
                 };
 
-
-
             scheduler.Start();
             var task = RunsTaskBlock(subTask, mockDisposable.Object).CreateCoroutine<int>(scheduler);
             Thread.SpinWait(10000);
@@ -141,7 +139,7 @@ namespace Coroutine.Tests
             Assert.IsTrue(taskRun, "Task was not run.");
         }
 
-        IEnumerable<object> RunsTaskBlock(Action task, IDisposable disposable)
+        public static IEnumerable<object> RunsTaskBlock(Action task, IDisposable disposable)
         {
             using (disposable)
             {
@@ -205,7 +203,7 @@ namespace Coroutine.Tests
             Assert.AreEqual(value, task.Result, "Values differ.");
         }
 
-        IEnumerable<object> PropagatesValuesFromTaskBlock(Func<int> func, IDisposable disposable)
+        public static IEnumerable<object> PropagatesValuesFromTaskBlock(Func<int> func, IDisposable disposable)
         {
             using (disposable)
             {
@@ -250,15 +248,15 @@ namespace Coroutine.Tests
             Assert.AreEqual(52, task.Result);
         }
 
-        IEnumerable<object> ReturnsResultFromNestedCoroutineBlock()
+        public static IEnumerable<object> ReturnsResultFromNestedCoroutineBlock()
         {
-            Assert.AreEqual(typeof(SingleThreadedTaskScheduler), TaskScheduler.Current.GetType());
+            //Assert.AreEqual(typeof(SingleThreadedTaskScheduler), TaskScheduler.Current.GetType());
             var inner = ReturnsResultFromNestedCoroutineBlockInner().AsCoroutine<int>();
             yield return inner;
             yield return inner.Result;
         }
 
-        IEnumerable<object> ReturnsResultFromNestedCoroutineBlockInner()
+        static IEnumerable<object> ReturnsResultFromNestedCoroutineBlockInner()
         {
             yield return 52;
         }
@@ -276,10 +274,10 @@ namespace Coroutine.Tests
 
             Assert.IsTrue(task.IsCompleted);
             Assert.IsTrue(task.IsFaulted);
-            Assert.AreEqual(e, task.Exception.InnerException);
+            Assert.AreEqual(e, task.Exception.InnerException.InnerException);
         }
 
-        IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlock(Exception e)
+        public static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlock(Exception e)
         {
             var inner = PropagatesExceptionFromNestedCoroutineBlockInner(e).AsCoroutine<int>();
             yield return inner;
@@ -289,7 +287,7 @@ namespace Coroutine.Tests
             yield return inner.Result;
         }
 
-        IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlockInner(Exception e)
+        static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlockInner(Exception e)
         {
             throw e;
         }

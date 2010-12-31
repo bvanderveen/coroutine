@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Coroutine
 {
@@ -91,6 +92,43 @@ namespace Coroutine
             }));
 
             return tcs.Task;
+        }
+
+
+        public static Task<object> StartCoroutineTask(this IEnumerable<object> iteratorBlock)
+        {
+            return iteratorBlock.StartCoroutineTask(TaskScheduler.Current);
+        }
+
+        public static Task<object> StartCoroutineTask(this IEnumerable<object> iteratorBlock, TaskScheduler scheduler)
+        {
+            var tcs = new TaskCompletionSource<object>();
+
+            iteratorBlock.AsContinuation(a => Task.Factory.StartNew(a, CancellationToken.None, TaskCreationOptions.None, scheduler))
+                (r => tcs.SetResult(r), e => tcs.SetException(e));
+
+            return tcs.Task;
+        }
+
+        public static ContinuationState<T> AsCoroutine2<T>(this IEnumerable<object> iteratorBlock)
+        {
+            return new ContinuationState<T>(iteratorBlock.AsContinuation());
+        }
+
+        public static ContinuationState<T> AsCoroutine2<T>(this IEnumerable<object> iteratorBlock, Action<Action> trampoline)
+        {
+            return new ContinuationState<T>(iteratorBlock.AsContinuation(trampoline));
+        }
+
+        public static Continuation AsContinuation(this IEnumerable<object> iteratorBlock)
+        {
+            return iteratorBlock.AsContinuation(null);
+        }
+
+        public static Continuation AsContinuation(this IEnumerable<object> iteratorBlock, Action<Action> trampoline)
+        {
+            return (result, exception) =>
+                Coroutine2.Continue(iteratorBlock.GetEnumerator(), result, exception, trampoline);
         }
     }
 }

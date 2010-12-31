@@ -13,16 +13,45 @@ namespace Coroutine.Tests
     public class Coroutine2Tests
     {
         [Test]
+        public void ReturnsNull()
+        {
+            var mockDisposable = new Mock<IDisposable>();
+
+            var task = ReturnsNullBlock(mockDisposable.Object).StartCoroutineTask();
+
+            mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
+            Assert.IsTrue(task.IsCompleted, "Not IsCompleted");
+            Assert.IsFalse(task.IsFaulted, "IsFaulted");
+            Assert.IsNull(task.Result);
+        }
+
+        IEnumerable<object> ReturnsNullBlock(IDisposable disposable)
+        {
+            using (disposable)
+            {
+                yield return null;
+            }
+        }
+
+        [Test]
         public void ReturnsResult()
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            var task = CoroutineTests.ReturnsResultBlock(mockDisposable.Object).StartCoroutineTask<string>();
+            var task = ReturnsResultBlock(mockDisposable.Object).StartCoroutineTask();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.IsTrue(task.IsCompleted, "Not IsCompleted");
             Assert.IsFalse(task.IsFaulted, "IsFaulted");
             Assert.AreEqual("result", task.Result);
+        }
+
+        IEnumerable<object> ReturnsResultBlock(IDisposable disposable)
+        {
+            using (disposable)
+            {
+                yield return "result";
+            }
         }
 
         [Test]
@@ -36,9 +65,9 @@ namespace Coroutine.Tests
 
             try
             {
-                var block = CoroutineTests.ImmediateExceptionBlock(exception, mockDisposable.Object);
+                var block = ImmediateExceptionBlock(exception, mockDisposable.Object);
 
-                task = block.AsContinuation<string>(_ => { }).AsTask();
+                task = block.AsContinuation(_ => { }).AsTask();
             }
             catch (Exception e)
             {
@@ -47,6 +76,15 @@ namespace Coroutine.Tests
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
             Assert.AreEqual(exception, caughtException, "Exceptions differ.");
+        }
+
+        IEnumerable<object> ImmediateExceptionBlock(Exception exception, IDisposable disposable)
+        {
+            using (disposable)
+            {
+                Console.WriteLine("throwing exception.");
+                throw exception;
+            }
         }
 
         [Test]
@@ -60,10 +98,10 @@ namespace Coroutine.Tests
 
             try
             {
-                task = CoroutineTests.DeferredExceptionBlock(exception, mockDisposable.Object)
+                task = DeferredExceptionBlock(exception, mockDisposable.Object)
                     //.AsCoroutine2<string>(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
                     //.AsTask();
-                    .StartCoroutineTask<string>();
+                    .StartCoroutineTask();
             }
             catch (Exception e)
             {
@@ -74,6 +112,15 @@ namespace Coroutine.Tests
             Assert.IsNull(caughtException, "Coroutine constructor threw up.");
             Assert.IsNotNull(task.Exception, "Coroutine didn't have exception.");
             Assert.AreEqual(exception, task.Exception.InnerException, "Exceptions differ.");
+        }
+
+        IEnumerable<object> DeferredExceptionBlock(Exception exception, IDisposable disposable)
+        {
+            using (disposable)
+            {
+                yield return Task.Factory.StartNew(() => { });
+                throw exception;
+            }
         }
 
         [Test]
@@ -90,13 +137,22 @@ namespace Coroutine.Tests
                 taskRun = true;
             };
 
-            var task = CoroutineTests.RunsTaskBlock(subTask, mockDisposable.Object).StartCoroutineTask<object>();
+            var task = RunsTaskBlock(subTask, mockDisposable.Object).StartCoroutineTask();
             task.Wait();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once());
             Assert.IsTrue(task.IsCompleted, "Not IsCompleted");
             Assert.IsFalse(task.IsFaulted, "IsFaulted");
             Assert.IsTrue(taskRun, "Task was not run.");
+        }
+
+        IEnumerable<object> RunsTaskBlock(Action task, IDisposable disposable)
+        {
+            using (disposable)
+            {
+                yield return Task.Factory.StartNew(task);
+                yield return null;
+            }
         }
 
         [Test]
@@ -112,7 +168,7 @@ namespace Coroutine.Tests
                 return value;
             };
 
-            var task = CoroutineTests.PropagatesValuesFromTaskBlock(subTask, mockDisposable.Object).StartCoroutineTask<int>();
+            var task = PropagatesValuesFromTaskBlock(subTask, mockDisposable.Object).StartCoroutineTask();
             task.Wait();
             
             mockDisposable.Verify(d => d.Dispose(), Times.Once());
@@ -121,23 +177,20 @@ namespace Coroutine.Tests
             Assert.AreEqual(value, task.Result, "Values differ.");
         }
 
-        [Test]
-        public void Covar()
+        IEnumerable<object> PropagatesValuesFromTaskBlock(Func<int> func, IDisposable disposable)
         {
-            Continuation<object> c = new Continuation<Tuple<int>>((r, e) => r(new Tuple<int>(0)));
-
-            Assert.IsTrue(c.GetType().IsGenericType);
-            Assert.IsTrue(c.GetType().GetGenericTypeDefinition() == typeof(Continuation<>));
-            Assert.
-
-            var inner = ReturnsResultFromNestedCoroutineBlockInner().AsCoroutine2<int>();
-            Assert.IsTrue(inner is IContinuationState<int>);
+            using (disposable)
+            {
+                var task = Task.Factory.StartNew(func);
+                yield return task;
+                yield return task.Result;
+            }
         }
 
         [Test]
         public void ReturnsResultFromNestedCoroutine()
         {
-            var task = ReturnsResultFromNestedCoroutineBlock().StartCoroutineTask<int>();
+            var task = ReturnsResultFromNestedCoroutineBlock().StartCoroutineTask();
             task.Wait();
 
             Assert.IsTrue(task.IsCompleted);
@@ -156,6 +209,7 @@ namespace Coroutine.Tests
 
         static IEnumerable<object> ReturnsResultFromNestedCoroutineBlockInner()
         {
+            // logic...
             yield return 52;
         }
 
@@ -164,14 +218,28 @@ namespace Coroutine.Tests
         {
             Exception e = new Exception("Boo.");
 
-            var task = CoroutineTests.PropagatesExceptionFromNestedCoroutineBlock(e)
-                    .AsContinuation<string>(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
+            var task = PropagatesExceptionFromNestedCoroutineBlock(e)
+                    .AsContinuation(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
                     .AsTask();
             Thread.SpinWait(10000);
 
             Assert.IsTrue(task.IsCompleted);
             Assert.IsTrue(task.IsFaulted);
             Assert.AreEqual(e, task.Exception.InnerException);
+        }
+
+        public static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlock(Exception e)
+        {
+            var inner = PropagatesExceptionFromNestedCoroutineBlockInner(e).AsCoroutine2<int>();
+            yield return inner;
+
+            // should throw
+            yield return inner.Result;
+        }
+
+        static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlockInner(Exception e)
+        {
+            throw e;
         }
     }
 }

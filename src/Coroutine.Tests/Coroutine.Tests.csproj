@@ -47,6 +47,8 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Benchmark.cs" />
+    <Compile Include="Coroutine2Tests.cs" />
     <Compile Include="CoroutineExample.cs" />
     <Compile Include="CoroutineTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
