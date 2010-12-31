@@ -38,7 +38,7 @@ namespace Coroutine.Tests
         [Test]
         public void Coroutine()
         {
-            CoroutineExample.ReadStreamToEnd(stream).BeginCoroutine(
+            CoroutineExample.ReadStreamToEnd(stream).GetEnumerator().AsContinuation<object>()(
                 r =>
                 {
                     result = (string)r;

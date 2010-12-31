@@ -37,7 +37,7 @@ namespace Coroutine.Tests
 
             bool gotResult = false;
 
-            ReturnsNullBlock(mockDisposable.Object).AsContinuation()
+            ReturnsNullBlock(mockDisposable.Object).AsContinuation<object>()
                 (r => { gotResult = true; result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -60,7 +60,7 @@ namespace Coroutine.Tests
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            ReturnsResultBlock(mockDisposable.Object).AsContinuation()
+            ReturnsResultBlock(mockDisposable.Object).AsContinuation<object>()
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -89,7 +89,7 @@ namespace Coroutine.Tests
 
             try
             {
-                ImmediateExceptionBlock(exception, mockDisposable.Object).AsContinuation(_ => { })
+                ImmediateExceptionBlock(exception, mockDisposable.Object).AsContinuation<object>(_ => { })
                     (r => result = r, e => yieldedException = e);
             }
             catch (Exception e)
@@ -123,7 +123,7 @@ namespace Coroutine.Tests
 
             try
             {
-                DeferredExceptionBlock(exception, mockDisposable.Object).AsContinuation()
+                DeferredExceptionBlock(exception, mockDisposable.Object).AsContinuation<object>()
                     (r => { result = r; wh.Set(); }, e => { yieldedException = e; wh.Set(); });
                 wh.Wait();
             }
@@ -148,40 +148,11 @@ namespace Coroutine.Tests
         }
 
         [Test]
-        public void Nest_PropagesException()
-        {
-            var mockDisposable = new Mock<IDisposable>();
-
-            bool gotResult = false;
-            bool gotException = false;
-            Nest_PropagatesExceptionBlock(mockDisposable.Object).AsContinuation()
-                (r => { gotResult = true; result = r; wh.Set(); }, e => { gotException = true; exception = e; wh.Set(); });
-            wh.Wait();
-
-            mockDisposable.Verify(d => d.Dispose(), Times.Once());
-            Assert.IsFalse(gotResult);
-            Assert.IsTrue(gotException);
-            Assert.IsNull(result);
-            Assert.IsNotNull(exception);
-            Assert.AreEqual("ContinuationException", exception.Message);
-        }
-
-        IEnumerable<object> Nest_PropagatesExceptionBlock(IDisposable disposable)
-        {
-            using (disposable)
-            {
-                yield return Extensions.SetCurrentContinuation((r, e) => e(new Exception("ContinuationException")));
-                var result = ContinuationState.current.GetResult<object>();
-                yield return result;
-            }
-        }
-
-        [Test]
         public void Nest_Completes()
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            Nest_CompletesBlock(mockDisposable.Object).AsContinuation()
+            Nest_CompletesBlock(mockDisposable.Object).AsContinuation<object>()
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -193,7 +164,7 @@ namespace Coroutine.Tests
         {
             using (disposable)
             {
-                yield return new Continuation((r, e) => r(null));
+                yield return new ContinuationState<object>((r, e) => r(null));
                 yield return "result";
             }
         }
@@ -203,7 +174,7 @@ namespace Coroutine.Tests
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            Nest_ResultState(mockDisposable.Object).AsContinuation()
+            Nest_ResultState(mockDisposable.Object).AsContinuation<object>()
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -216,10 +187,9 @@ namespace Coroutine.Tests
         {
             using (disposable)
             {
-                var cont = new Continuation((r, e) => r("result"));
-                ContinuationState.SetContinuation(ContinuationState.current, cont);
-                yield return ContinuationState.current;
-                yield return ContinuationState.current.GetResult<string>();
+                var state = new ContinuationState<object>((r, e) => r("result"));
+                yield return state;
+                yield return state.Result;
             }
         }
 
@@ -228,7 +198,7 @@ namespace Coroutine.Tests
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            Nest_ResultStateTrampoline(mockDisposable.Object).AsContinuation(a => { new Thread(() => a()).Start(); })
+            Nest_ResultStateTrampoline(mockDisposable.Object).AsContinuation<object>(a => { new Thread(() => a()).Start(); })
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -241,10 +211,9 @@ namespace Coroutine.Tests
         {
             using (disposable)
             {
-                var cont = new Continuation((r, e) => r("result"));
-                ContinuationState.SetContinuation(ContinuationState.current, cont);
-                yield return ContinuationState.current;
-                yield return ContinuationState.current.GetResult<string>();
+                var state = new ContinuationState<object>((r, e) => r("result"));
+                yield return state;
+                yield return state.Result;
             }
         }
 
@@ -253,21 +222,27 @@ namespace Coroutine.Tests
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            Nest_ExceptionState(mockDisposable.Object).AsContinuation()
-                (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
+            bool gotResult = false;
+            bool gotException = false;
+            Nest_ExceptionState(mockDisposable.Object).AsContinuation<object>()
+                (r => { gotResult = true; result = r; wh.Set(); }, e => { gotException = true; exception = e; wh.Set(); });
             wh.Wait();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once());
+            Assert.IsFalse(gotResult);
+            Assert.IsTrue(gotException);
             Assert.IsNull(result);
-            Assert.AreEqual("Nest_ExceptionState Exception", exception.Message);
+            Assert.IsNotNull(exception);
+            Assert.AreEqual("Nest_ExceptionState Exception", exception.InnerException.InnerException.Message);
         }
 
         IEnumerable<object> Nest_ExceptionState(IDisposable disposable)
         {
             using (disposable)
             {
-                yield return Extensions.SetCurrentContinuation((r, e) => e(new Exception("Nest_ExceptionState Exception")));
-                yield return ContinuationState.current.GetResult<string>();
+                var state = new ContinuationState<object>((r, e) => e(new Exception("Nest_ExceptionState Exception")));
+                yield return state;
+                yield return state.Result;
             }
         }
 
@@ -276,23 +251,22 @@ namespace Coroutine.Tests
         {
             var mockDisposable = new Mock<IDisposable>();
 
-            Nest_ExceptionStateTrampoline(mockDisposable.Object).AsContinuation(a => { new Thread(() => a()).Start(); })
+            Nest_ExceptionStateTrampoline(mockDisposable.Object).AsContinuation<object>(a => { new Thread(() => a()).Start(); })
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
             mockDisposable.Verify(d => d.Dispose(), Times.Once());
             Assert.IsNull(result);
-            Assert.AreEqual("Nest_ExceptionState Exception", exception.Message);
+            Assert.AreEqual("Nest_ExceptionState Exception", exception.InnerException.InnerException.Message);
         }
 
         IEnumerable<object> Nest_ExceptionStateTrampoline(IDisposable disposable)
         {
             using (disposable)
             {
-                var cont = new Continuation((r, e) => e(new Exception("Nest_ExceptionState Exception")));
-                ContinuationState.SetContinuation(ContinuationState.current, cont);
-                yield return ContinuationState.current;
-                yield return ContinuationState.current.GetResult<string>();
+                var state = new ContinuationState<object>((r, e) => e(new Exception("Nest_ExceptionState Exception")));
+                yield return state;
+                yield return state.Result;
             }
         }
 
@@ -300,7 +274,7 @@ namespace Coroutine.Tests
         public void TaskCompletes()
         {
             Mock<IDisposable> mockDisposable = new Mock<IDisposable>();
-            mockDisposable.Setup(d => d.Dispose()).Callback(() => Console.WriteLine("Dispose."));
+            //mockDisposable.Setup(d => d.Dispose()).Callback(() => Console.WriteLine("Dispose."));
 
             bool taskRun = false;
             Action subTask = () =>
@@ -310,7 +284,7 @@ namespace Coroutine.Tests
                 taskRun = true;
             };
 
-            TaskCompletesBlock(subTask, mockDisposable.Object).AsContinuation()
+            TaskCompletesBlock(subTask, mockDisposable.Object).AsContinuation<object>()
                 (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
             wh.Wait();
 
@@ -329,58 +303,83 @@ namespace Coroutine.Tests
             }
         }
 
-        //[Test]
-        //public void ReturnsResultFromNestedCoroutine()
-        //{
-        //    var task = ReturnsResultFromNestedCoroutineBlock().StartCoroutineTask();
-        //    task.Wait();
+        [Test]
+        public void NestedBlock_ReturnsResultFromNestedBlock()
+        {
+            var mockDisposable0 = new Mock<IDisposable>();
+            var mockDisposable1 = new Mock<IDisposable>();
+            var o = new object();
 
-        //    Assert.IsTrue(task.IsCompleted);
-        //    Assert.IsFalse(task.IsFaulted);
-        //    Assert.AreEqual(52, task.Result);
-        //}
+            NestedBlock_ReturnsResultFromNestedBlock(mockDisposable0.Object, mockDisposable1.Object, o).AsContinuation<object>()
+                (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
+            wh.Wait();
 
-        //public static IEnumerable<object> ReturnsResultFromNestedCoroutineBlock()
-        //{
-        //    var inner = ReturnsResultFromNestedCoroutineBlockInner().AsCoroutine<int>();
-        //    yield return inner;
-        //    Console.WriteLine("result is " + inner.Result);
-        //    yield return inner.Result;
-        //}
+            mockDisposable0.Verify(d => d.Dispose(), Times.Once());
+            mockDisposable1.Verify(d => d.Dispose(), Times.Once());
 
-        //static IEnumerable<object> ReturnsResultFromNestedCoroutineBlockInner()
-        //{
-        //    // logic...
-        //    yield return 52;
-        //}
+            Assert.IsNull(exception);
+            Assert.AreEqual(o, result);
+        }
 
-        //[Test]
-        //public void PropagatesExceptionFromNestedCoroutine()
-        //{
-        //    Exception e = new Exception("Boo.");
+        public static IEnumerable<object> NestedBlock_ReturnsResultFromNestedBlock(IDisposable d0,IDisposable d1, object o)
+        {
+            using (d0)
+            {
+                var inner = ReturnsResultFromNestedCoroutineBlockInner(d1, o).AsCoroutine<object>();
+                yield return inner;
+                //Console.WriteLine("jkl?");
+                yield return inner.Result;
+                //Console.WriteLine("jkl");
+            }
+        }
 
-        //    var task = PropagatesExceptionFromNestedCoroutineBlock(e)
-        //            .AsContinuation(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
-        //            .AsTask();
-        //    Thread.SpinWait(10000);
+        static IEnumerable<object> ReturnsResultFromNestedCoroutineBlockInner(IDisposable d, object o)
+        {
+            using (d)
+            {
+                //Console.WriteLine("asdf?");
+                yield return o;
+                //Console.WriteLine("asdf...");
+                yield return "asdf";
+                //Console.WriteLine("asdf");
+            }
+        }
 
-        //    Assert.IsTrue(task.IsCompleted);
-        //    Assert.IsTrue(task.IsFaulted);
-        //    Assert.AreEqual(e, task.Exception.InnerException);
-        //}
+        [Test]
+        public void NestedBlock_PropagatesExceptionFromNestedBlock()
+        {
+            var mockDisposable0 = new Mock<IDisposable>();
+            var mockDisposable1 = new Mock<IDisposable>();
+            Exception ex = new Exception("Boo.");
 
-        //public static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlock(Exception e)
-        //{
-        //    var inner = PropagatesExceptionFromNestedCoroutineBlockInner(e).AsCoroutine<int>();
-        //    yield return inner;
+            var mockDisposable = new Mock<IDisposable>();
 
-        //    // should throw
-        //    yield return inner.Result;
-        //}
+            NestedBlock_PropagatesExceptionFromNestedBlock(ex, mockDisposable0.Object, mockDisposable1.Object)
+                .AsContinuation<object>(a => { Thread.Sleep(0); ThreadPool.QueueUserWorkItem(_ => a()); })
+                (r => { result = r; wh.Set(); }, e => { exception = e; wh.Set(); });
+            wh.Wait();
 
-        //static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlockInner(Exception e)
-        //{
-        //    throw e;
-        //}
+            Assert.IsNull(result);
+            Assert.IsNotNull(exception);
+            Assert.AreEqual(ex, exception.InnerException);
+        }
+
+        public static IEnumerable<object> NestedBlock_PropagatesExceptionFromNestedBlock(Exception e, IDisposable d0, IDisposable d1)
+        {
+            using (d0)
+            {
+                var inner = PropagatesExceptionFromNestedCoroutineBlockInner(e, d1).AsCoroutine<int>();
+                yield return inner;
+                yield return inner.Result; // should throw
+            }
+        }
+
+        static IEnumerable<object> PropagatesExceptionFromNestedCoroutineBlockInner(Exception e, IDisposable d)
+        {
+            using (d)
+            {
+                throw e;
+            }
+        }
     }
 }

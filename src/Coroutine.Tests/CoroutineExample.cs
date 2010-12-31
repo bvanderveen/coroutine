@@ -25,17 +25,26 @@ namespace Coroutine.Tests
 
             do
             {
+                // synchronous example--would work! probably gum up your throughput though
+                //bytesRead = stream.Read(buffer, 0, buffer.Length);
+
                 //var read = stream.ReadAsync(buffer, 0, buffer.Length);
                 //yield return read;
-
                 //bytesRead = read.GetResult<int>();
 
-                var read = stream.ReadAsyncTask(buffer, 0, buffer.Length);
+                var read = stream.ReadAsync(buffer, 0, buffer.Length);
                 yield return read;
-
+                Console.WriteLine("read " + read.Result);
                 bytesRead = read.Result;
 
-                //bytesRead = stream.Read(buffer, 0, buffer.Length);
+                // impossible.
+                //Exception ex = null;
+                //yield return stream.ReadAsyncC(buffer, 0, buffer.Length)(n => bytesRead = n, e => ex = e); 
+
+                //var read = stream.ReadAsyncTask(buffer, 0, buffer.Length);
+                //yield return read;
+                //bytesRead = read.Result;
+
 
                 sb.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
             }
@@ -51,9 +60,9 @@ namespace Coroutine.Tests
                 iasr => stream.EndRead(iasr), null);
         }
 
-        static ContinuationState ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
+        static ContinuationState<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
         {
-            return Extensions.SetCurrentContinuation(Extensions.AsContinuation(
+            return new ContinuationState<int>(Extensions.AsContinuation(
                 (cb, s) => stream.BeginRead(buffer, offset, count, cb, s),
                 stream.EndRead));
         }

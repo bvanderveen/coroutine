@@ -5,38 +5,39 @@ using System.Threading.Tasks;
 
 namespace Coroutine
 {
-    public delegate void Continuation(Action<object> complete, Action<Exception> exception);
+    public delegate void Continuation<T>(Action<T> complete, Action<Exception> exception);
 
-    public class ContinuationState
+    public class ContinuationState<T>
     {
-        [ThreadStatic]
-        public static ContinuationState current;
+        T result;
+        Exception exception;
+        internal Continuation<T> continuation;
 
-        internal object result;
-        internal Exception exception;
-        internal Continuation Continuation;
-
-        public static void SetContinuation(ContinuationState state, Continuation continuation)
+        public ContinuationState(Continuation<T> continuation)
         {
-            state.Continuation =
+            this.continuation =
                 (r, e) => continuation(
-                    r0 => { state.result = r0; r(r0); }, 
-                    e0 => { state.exception = e0; e(e0); });
+                    r0 => { result = r0; r(r0); }, 
+                    e0 => { exception = e0; e(e0); });
         }
 
-        public T GetResult<T>() {
-            if (ContinuationState.current.exception != null) 
-                throw ContinuationState.current.exception;
+        public T Result
+        {
+            get
+            {
+                if (exception != null)
+                    throw new Exception("The continuation resulted in an exception.", exception);
 
-            return (T)ContinuationState.current.result; 
+                return result;
+            }
         }
     }
 
     public static class Coroutine
     {
-        public static void Continue(IEnumerator<object> continuation, Action<object> result, Action<Exception> exception, Action<Action> trampoline)
+        public static void Continue<T>(IEnumerator<object> continuation, Action<T> result, Action<Exception> exception, Action<Action> trampoline)
         {
-            //Console.WriteLine("Continuing!");
+            Console.WriteLine("Continuing!");
             var continues = false;
             object value = null;
 
@@ -48,57 +49,53 @@ namespace Coroutine
             }
             catch (Exception e)
             {
-                //Console.WriteLine("Exception during MoveNext.");
+                Console.WriteLine("Exception during MoveNext.");
                 continuation.Dispose();
-                exception(e);
+                exception(new Exception("Exception while continuing coroutine.", e));
                 return;
             }
 
             if (!continues)
             {
-                //Console.WriteLine("Continuation does not continue.");
+                Console.WriteLine("Continuation " + continuation + "  does not continue.");
                 continuation.Dispose();
-                //result(null);
                 return;
             }
 
             try
             {
-                Continuation cont = null;
+                if (value is ContinuationState<T>)
+                    value = (value as ContinuationState<T>).continuation;
 
-                if (value is Continuation)
-                    cont = value as Continuation;
-                else if (value is ContinuationState)
-                    cont = (value as ContinuationState).Continuation;
-                else if (value is Task)
-                    cont = (value as Task).AsContinuation();
-                
-                if (cont != null)
+                if (value is Continuation<T>)
                 {
-                    ContinuationState currentState = ContinuationState.current;
-
-                    Action setStateAndContinue = () => {
-                                    ContinuationState.current = currentState;
-                                    Continue(continuation, result, exception, trampoline); 
-                                };
-
-                    Action<object> trampolined = trampoline == null ? 
-                        (Action<object>)(_ => setStateAndContinue()) : 
-                        (Action<object>)(_ => trampoline(setStateAndContinue));
-
-                    cont(trampolined, trampolined);
-                }
-                else
-                {
-                    continuation.Dispose();
-                    result(value);
+                    Console.WriteLine("will continue.");
+                    (value as Continuation<T>).Invoke(
+                        trampoline == null ?
+                            (Action<T>)(_ => Continue(continuation, result, exception, null)) :
+                            (Action<T>)(_ => trampoline(() => Continue<T>(continuation, result, exception, trampoline))),
+                        trampoline == null ?
+                            (Action<Exception>)(_ => Continue(continuation, result, exception, null)) :
+                            (Action<Exception>)(_ => trampoline(() => Continue<T>(continuation, result, exception, trampoline))));
                     return;
                 }
+                else if (value == null || value is T)
+                {
+                    Console.WriteLine("result value!");
+                    result((T)value);
+
+                    // enforce single-value. iterate over the end of the block so all code is executed.
+                    while (continuation.MoveNext()) { };
+                    continuation.Dispose();
+                    return;
+                }
+
+                Continue<T>(continuation, result, exception, trampoline);
             }
             catch (Exception e)
             {
                 continuation.Dispose();
-                exception(e);
+                exception(new Exception("Exception while handling value yielded by coroutine.", e));
                 return;
             }
         }
