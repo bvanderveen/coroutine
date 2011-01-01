@@ -70,7 +70,7 @@ namespace Coroutine
                 if (value is Continuation<T>)
                 {
                     Console.WriteLine("will continue.");
-                    (value as Continuation<T>).Invoke(
+                    (value as Continuation<T>)(
                         trampoline == null ?
                             (Action<T>)(_ => Continue(continuation, result, exception, null)) :
                             (Action<T>)(_ => trampoline(() => Continue<T>(continuation, result, exception, trampoline))),
