@@ -28,7 +28,7 @@ The .NET Framework provides several constructs which can be adapted to a Corouti
 * The `System.Threading.Tasks.Task` class provided by the [Task Parallel Library](http://msdn.microsoft.com/en-us/library/dd460717.aspx)
 * The `System.IObservable<T>` interface provided by the [Reactive Framework](http://msdn.microsoft.com/en-us/devlabs/ee794896).
     
-Coroutine includes support for all of these constructs.
+Coroutine can support all of these constructs.
 
 # Behavior
 
