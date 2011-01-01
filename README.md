@@ -20,9 +20,9 @@ Coroutine makes writing asynchronous code in C# as easy and natural as writing s
        yield return "the result of other was " + other.Result;
    }
 
-Coroutine defines an asynchronous operation as a delegate of the form `Action<Action<object>, Action<Exception>`&mdash;that is, a delegate which, when invoked, will eventually invoke one of the delegates passed to it as arguments, thereby providing the caller of the outer delegate with the result of the operation, or an exception.
+Coroutine defines an asynchronous operation as a delegate of the form `Action<Action<T>, Action<Exception>`&mdash;that is, a delegate which, when invoked, will eventually invoke one of the delegates passed to it as arguments, thereby providing the caller of the outer delegate with the result of the operation, or an exception. In the context of this library, a delegate of this form is known as a *continuation*. To support operations which do not return a result value, delegates of the form `Action<Action, Action<Exception>` are also considered continuations.
     
-The .NET Framework provides several constructs which can be adapted to a Coroutine-compatible asynchronous operation:
+The .NET Framework provides several constructs which can be adapted to a Coroutine-compatible continuation:
 
 * The [Asynchronous Programming Model (APM)](apm) pattern (also known as the `IAsyncResult` pattern). 
 * The `System.Threading.Tasks.Task` class provided by the [Task Parallel Library](http://msdn.microsoft.com/en-us/library/dd460717.aspx)
@@ -34,24 +34,26 @@ Coroutine includes support for all of these constructs.
 
 Coroutine allows you to create an asynchronous operation which represents the iteration of an iterator block (a *coroutine*).
 
-When the iterator block yields a regular value, the coroutine completes with that object. If the iterator block throws an exception, the coroutine results in an error.
+When the iterator block yields a value of the generic type it was initialized with, the coroutine continuation completes with that value. If the iterator block throws an exception, the coroutine continuation results in an error.
 
-When the iterator block yields an object which represents an asynchronous operation, iteration of the block does not continue until the yielded operation successfully completes. If the yielded operation results in an error, the coroutine results in an error.
+When the iterator block yields a continuation, the iteration of the block does not continue until continuation completes. The iteration of the block will continue regardless of if the continuation yields an exception, so you much check for this.
 
-Because the coroutine is itself an asynchronous operation, you may yield coroutines from within coroutines, allowing you to compose asynchronous operations in a natural way.
+Because the coroutine can be represented as a continuation, you may yield coroutines from within coroutines, allowing you to compose asynchronous operations in a natural, familiar way, which resembles synchronous programming.
 
 When starting a new coroutine, you may provide a trampoline delegate of the form `Action<Action>`. Whenever an asynchronous operation completes, the coroutine will call the trampoline delegate with a single argument. That argument is a delegate which will continue the iteration of the coroutines iterator block. In this way, you can control when and on what thread the coroutine advances.
 
 # Example
 
-Coroutine was designed for use with [Kayak](http://github.com/kayak/kayak), a C# web server. A common use-case for Coroutine within Kayak is performing asynchronous IO. In the following example, a stream is read asynchronously and buffered into a string.
+Coroutine was designed for use with [Kayak](http://github.com/kayak/kayak), a C# web server. A common use-case for Coroutine within Kayak is performing asynchronous IO. In the following example, a stream is read asynchronously and buffered into a string. Notice that the async operation that's being yielded is an instance of `ContinuationState<int>`. This class creates a new continuation which wraps the original, allowing `ContinuationState` to capture the result or exception of the continuation, and expose it so that the enumerator block scope may act upon them.
 
     public void ReadStreamToEnd(Stream stream)
     {
-        ReadStreamToEndCoroutine(stream).AsCoroutine<string>().ContinueWith(t => "Stream contained: " + t.Result);
+        ReadStreamToEndCoroutine(stream).AsContinuation<string>()
+            (r => Console.WriteLine("Stream contained: " + r),
+            e => Console.WriteLine("Exception while reading: " + e.Message));
     }
 
-    IEnumerable<object> ReadStreamToEndCoroutine(Stream stream)
+    public static IEnumerable<object> ReadStreamToEndCoroutine(Stream stream)
     {
         StringBuilder sb = new StringBuilder();
         var buffer = new byte[1024];
@@ -59,25 +61,24 @@ Coroutine was designed for use with [Kayak](http://github.com/kayak/kayak), a C#
 
         do
         {
-            // yield a task which will read from the stream asynchronously
-            var read = Task.Factory.FromAsync<int>((cb, s) =>
-                {
-                    return stream.BeginRead(buffer, 0, buffer.Length, cb, s);
-                }, iasr => stream.EndRead(iasr), null);
-
-            yield return read;
-
-            // retrieve the result. this may throw an exception if
-            // the task faulted. if we don't catch the exception,
-            // the coroutine task will also fault.
-            bytesRead = read.Result;
+            
+            // get an object which represents an asynchronous read
+            var read = stream.ReadAsync(buffer, 0, buffer.Length); 
+            yield return read; // yield to it
+            bytesRead = read.Result; // returns result or throws exception
 
             sb.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
         }
         while (bytesRead > 0);
 
-        // yield an object of type string, this will be the result of the Coroutine Task
         yield return sb.ToString();
+    }
+
+    static ContinuationState<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
+    {
+        return ConinuationState.FromAsync<int>(
+            (cb, s) => stream.BeginRead(buffer, offset, count, cb, s),
+            stream.EndRead);
     }
     
     
