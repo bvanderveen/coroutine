@@ -6,21 +6,19 @@ Coroutine was created in 2010 by [Benjamin van der Veen](http://bvanderveen.com)
 
 Coroutine makes writing asynchronous code in C# as easy and natural as writing synchronous code. Usually, when writing asynchronous code, you have to provide a callback which gets executed when an asynchronous operation completes. Coroutine takes care of this for you and allows you to perform asynchronous operations in a single method, without lambda expressions, delegates, or callbacks.
 
+    IEnumerable<object> MyAsyncOperation()
+    {
+        // construct an asynchronous operation
+        var other = MyOtherAsyncOperation();
 
-   IEnumerable<object> MyAsyncOperation()
-   {
-       // construct an asynchronous operation
-       var other = MyOtherAsyncOperation();
-       
-       // yield to it...
-       yield return other;
-       
-       // ...execution continues after the other operation completes.
-       
-       // return a value.
-       yield return "the result of other was " + other.Result;
-   }
-   
+        // yield to it...
+        yield return other;
+
+        // ...execution continues after the other operation completes.
+
+        // return a value.
+        yield return "the result of other was " + other.Result;
+    }
 
 Coroutine defines an asynchronous operation as a delegate of the form `Action<Action<T>, Action<Exception>`&mdash;that is, a delegate which, when invoked, will eventually invoke one of the delegates passed to it as arguments, thereby providing the caller of the outer delegate with the result of the operation, or an exception. In the context of this library, a delegate of this form is known as a *continuation*. To support operations which do not return a result value, delegates of the form `Action<Action, Action<Exception>` are also considered continuations.
     
