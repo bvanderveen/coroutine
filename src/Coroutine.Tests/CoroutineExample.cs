@@ -62,9 +62,9 @@ namespace Coroutine.Tests
 
         static ContinuationState<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
         {
-            return new ContinuationState<int>(Extensions.AsContinuation(
+            return Extensions.AsContinuationState(
                 (cb, s) => stream.BeginRead(buffer, offset, count, cb, s),
-                stream.EndRead));
+                stream.EndRead);
         }
     }
 }

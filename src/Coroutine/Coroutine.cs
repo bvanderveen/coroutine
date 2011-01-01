@@ -5,20 +5,25 @@ using System.Threading.Tasks;
 
 namespace Coroutine
 {
-    public delegate void Continuation<T>(Action<T> complete, Action<Exception> exception);
+    // merely contains a record of the continuation, used by coroutine driver.
+    public class ContinuationState
+    {
+        public Action<Action> Continuation;
+    }
 
-    public class ContinuationState<T>
+    // used by iterator scope to capture the side effects of the operation 
+    // (coroutine driver only cares about the continuation).
+    public class ContinuationState<T> : ContinuationState
     {
         T result;
         Exception exception;
-        internal Continuation<T> continuation;
 
-        public ContinuationState(Continuation<T> continuation)
+        public ContinuationState(Action<Action<T>, Action<Exception>> continuation)
         {
-            this.continuation =
-                (r, e) => continuation(
-                    r0 => { result = r0; r(r0); }, 
-                    e0 => { exception = e0; e(e0); });
+            Continuation =
+                a => continuation(
+                    r0 => { result = r0; a(); }, 
+                    e0 => { exception = e0; a(); });
         }
 
         public T Result
@@ -64,19 +69,16 @@ namespace Coroutine
 
             try
             {
-                if (value is ContinuationState<T>)
-                    value = (value as ContinuationState<T>).continuation;
+                if (value is ContinuationState)
+                    value = (value as ContinuationState).Continuation;
 
-                if (value is Continuation<T>)
+                if (value is Action<Action>)
                 {
                     Console.WriteLine("will continue.");
-                    (value as Continuation<T>)(
+                    (value as Action<Action>)(
                         trampoline == null ?
-                            (Action<T>)(_ => Continue(continuation, result, exception, null)) :
-                            (Action<T>)(_ => trampoline(() => Continue<T>(continuation, result, exception, trampoline))),
-                        trampoline == null ?
-                            (Action<Exception>)(_ => Continue(continuation, result, exception, null)) :
-                            (Action<Exception>)(_ => trampoline(() => Continue<T>(continuation, result, exception, trampoline))));
+                            (Action)(() => Continue(continuation, result, exception, null)) :
+                            (Action)(() => trampoline(() => Continue<T>(continuation, result, exception, trampoline))));
                     return;
                 }
                 else if (value == null || value is T)
