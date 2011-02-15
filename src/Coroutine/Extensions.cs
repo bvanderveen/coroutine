@@ -9,6 +9,16 @@ namespace Coroutine
 {
     public static partial class Extensions
     {
+        public static Action<Action, Action<Exception>> AsContinuation(this IEnumerable<object> enumerable)
+        {
+            return enumerable.GetEnumerator().AsContinuation(null);
+        }
+
+        public static Action<Action, Action<Exception>> AsContinuation(this IEnumerable<object> enumerable, Action<Action> trampoline)
+        {
+            return enumerable.GetEnumerator().AsContinuation(trampoline);
+        }
+
         public static Action<Action<T>, Action<Exception>> AsContinuation<T>(this IEnumerable<object> enumerable)
         {
             return enumerable.GetEnumerator().AsContinuation<T>(null);
@@ -17,6 +27,17 @@ namespace Coroutine
         public static Action<Action<T>, Action<Exception>> AsContinuation<T>(this IEnumerable<object> enumerable, Action<Action> trampoline)
         {
             return enumerable.GetEnumerator().AsContinuation<T>(trampoline);
+        }
+
+        public static Action<Action, Action<Exception>> AsContinuation(this IEnumerator<object> enumerator)
+        {
+            return enumerator.AsContinuation(null);
+        }
+
+        public static Action<Action, Action<Exception>> AsContinuation(this IEnumerator<object> enumerator, Action<Action> trampoline)
+        {
+            return (result, exception) =>
+                Continuation.Enumerate(enumerator, result, exception, trampoline);
         }
 
         public static Action<Action<T>, Action<Exception>> AsContinuation<T>(this IEnumerator<object> enumerator)

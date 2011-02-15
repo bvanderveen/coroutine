@@ -5,15 +5,6 @@ using System.Threading.Tasks;
 
 namespace Coroutine
 {
-    // no-value
-    public class Unit
-    {
-        private Unit() { }
-        Unit value;
-        public Unit Value { get { return value ?? (value = new Unit()); } }
-    }
-
-
     // merely contains a record of the continuation, used by coroutine driver.
     public class ContinuationState
     {
@@ -28,7 +19,6 @@ namespace Coroutine
             Continuation = 
                 a => continuation(a, e => { exception = e; a(); });
         }
-
 
         public static ContinuationState<T> FromAsync<T>(Func<AsyncCallback, object, IAsyncResult> begin, Func<IAsyncResult, T> end)
         {
@@ -108,9 +98,8 @@ namespace Coroutine
             };
         }
 
-        public static void Enumerate<T>(IEnumerator<object> continuation, Action<T> result, Action<Exception> exception, Action<Action> trampoline)
+        public static void Enumerate(IEnumerator<object> continuation, Action result, Action<Exception> exception, Action<Action> trampoline)
         {
-            //Console.WriteLine("Continuing!");
             var continues = false;
             object value = null;
 
@@ -122,7 +111,6 @@ namespace Coroutine
             }
             catch (Exception e)
             {
-                //Console.WriteLine("Exception during MoveNext.");
                 continuation.Dispose();
                 exception(new Exception("Exception while continuing coroutine.", e));
                 return;
@@ -130,7 +118,7 @@ namespace Coroutine
 
             if (!continues)
             {
-                //Console.WriteLine("Continuation " + continuation + "  does not continue.");
+                result();
                 continuation.Dispose();
                 return;
             }
@@ -142,7 +130,54 @@ namespace Coroutine
 
                 if (value is Action<Action>)
                 {
-                    //Console.WriteLine("will continue.");
+                    (value as Action<Action>)(
+                        trampoline == null ?
+                            (Action)(() => Enumerate(continuation, result, exception, null)) :
+                            (Action)(() => trampoline(() => Enumerate(continuation, result, exception, trampoline))));
+                    return;
+                }
+
+                Enumerate(continuation, result, exception, trampoline);
+            }
+            catch (Exception e)
+            {
+                continuation.Dispose();
+                exception(new Exception("Exception while handling value yielded by coroutine.", e));
+                return;
+            }
+        }
+
+        public static void Enumerate<T>(IEnumerator<object> continuation, Action<T> result, Action<Exception> exception, Action<Action> trampoline)
+        {
+            var continues = false;
+            object value = null;
+
+            try
+            {
+                continues = continuation.MoveNext();
+                if (continues)
+                    value = continuation.Current;
+            }
+            catch (Exception e)
+            {
+                continuation.Dispose();
+                exception(new Exception("Exception while continuing coroutine.", e));
+                return;
+            }
+
+            if (!continues)
+            {
+                continuation.Dispose();
+                return;
+            }
+
+            try
+            {
+                if (value is ContinuationState)
+                    value = (value as ContinuationState).Continuation;
+
+                if (value is Action<Action>)
+                {
                     (value as Action<Action>)(
                         trampoline == null ?
                             (Action)(() => Enumerate(continuation, result, exception, null)) :
@@ -151,8 +186,6 @@ namespace Coroutine
                 }
                 else if (value == null || value is T)
                 {
-                    //Console.WriteLine("result value!");
-
                     // enforce single-value. iterate over the end of the block so all code is executed.
                     while (continuation.MoveNext()) { };
                     continuation.Dispose();

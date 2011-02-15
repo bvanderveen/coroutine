@@ -56,6 +56,31 @@ namespace Coroutine.Tests
         }
 
         [Test]
+        public void Flat_CompletesOnBreak()
+        {
+            var mockDisposable = new Mock<IDisposable>();
+
+            bool gotResult = false;
+
+            ReturnsNullBlock(mockDisposable.Object).AsContinuation()
+                (() => { gotResult = true; wh.Set(); }, e => { exception = e; wh.Set(); });
+            wh.Wait();
+
+            mockDisposable.Verify(d => d.Dispose(), Times.Once(), "Disposable not disposed.");
+            Assert.IsTrue(gotResult);
+            Assert.IsNull(result);
+            Assert.IsNull(exception);
+        }
+
+        IEnumerable<object> CompletesOnBreakBlock(IDisposable disposable)
+        {
+            using (disposable)
+            {
+                yield break;
+            }
+        }
+
+        [Test]
         public void Flat_ReturnsResult()
         {
             var mockDisposable = new Mock<IDisposable>();
